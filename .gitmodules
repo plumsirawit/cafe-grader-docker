@@ -3,4 +3,4 @@
 	url = https://github.com/s6007589/cafe-grader-web.git
 [submodule "scripts"]
 	path = scripts
-	url = ./scripts
+	url = https://github.com/s6007589/cafe-grader-judge-scripts.git
