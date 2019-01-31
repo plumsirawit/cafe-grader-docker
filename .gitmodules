@@ -1,6 +1,6 @@
-[submodule "scripts"]
-	path = scripts
-	url = https://github.com/cafe-grader-team/cafe-grader-judge-scripts.git
 [submodule "web"]
 	path = web
 	url = https://github.com/s6007589/cafe-grader-web.git
+[submodule "scripts"]
+	path = scripts
+	url = ./scripts
