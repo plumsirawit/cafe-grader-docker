@@ -7,7 +7,7 @@ services:
     links:
       - db
     ports:
-      - 80:3000
+      - 443:3000
     environment:
       MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
       MYSQL_USER: root
@@ -15,6 +15,8 @@ services:
       MYSQL_DATABASE: db
     volumes:
       - main:/cafe_grader
+      - ./server.key:/cafe_grader/server.key
+      - ./server.crt:/cafe_grader/server.crt
   db:
     image: mysql:5.7
     restart: always
