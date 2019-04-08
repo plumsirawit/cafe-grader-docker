@@ -1,0 +1,471 @@
+#!/usr/bin/env ruby
+
+def stop_grader(id)
+  if id==:all
+    File.open(File.dirname(__FILE__) + "/stop.all",'w').close
+  else
+    File.open(File.dirname(__FILE__) + "/stop.#{id}",'w').close
+  end
+end
+
+def check_stopfile
+  FileTest.exist?(File.dirname(__FILE__) + "/stop.all") or
+    FileTest.exist?(File.dirname(__FILE__) + "/stop.#{Process.pid}")
+end
+
+def clear_stopfile
+  if FileTest.exist?(File.dirname(__FILE__) + "/stop.#{Process.pid}")
+    File.delete(File.dirname(__FILE__) + "/stop.#{Process.pid}")
+  end
+end
+
+def config
+  Grader::Configuration.get_instance
+end
+
+def log_file_name
+  if !File.exists?(config.log_dir)
+    raise "Log directory does not exist: #{config.log_dir}"
+  end
+  config.log_dir + 
+    "/#{GRADER_ENV}_#{config.grader_mode}.#{Process.pid}"
+end
+
+def log(str)
+  if config.talkative
+    puts str
+  end
+  if config.logging
+    fp = File.open(log_file_name,"a")
+    fp.puts("GRADER: #{Time.new.strftime("%H:%M")} #{str}")
+    fp.close
+  end
+end
+
+def display_manual
+  puts <<USAGE
+Grader.
+using: (1) grader 
+       (2) grader environment [mode] [options]
+       (3) grader stop [all|pids-list]
+       (4) grader --help
+(1) call grader with environment = 'exam', mode = 'queue'
+(2) possible modes are: 'queue', 'test_request', 'prob', 'sub', 'contest', and 'autonew'
+  queue: repeatedly check the task queue and grade any available tasks
+
+  prob:  re-grade every user latest submission of the specific problem.
+         the problem name must be specified by the next argument.
+
+         additional options:
+            --all-sub    re-grade every submissions instead of just the latest submission of each user.
+
+  sub:   re-grader the specified submission.
+         The submission ID to be re-graded must be specified by the next argument.
+
+  options:
+    --err-log   log error to a file in the log dir
+
+(3) create stop-file to stop running grader in queue mode
+(4) You are here.
+USAGE
+end
+
+def process_options_and_stop_file
+  # The list of options are:
+  #   - stop [all|process ids]
+  #   -  
+  
+  # Process 'help' option
+  if (ARGV.length==1) and (/help/.match(ARGV[0]))
+    display_manual
+    exit(0)
+  end
+
+  # Process 'stop' option.
+  if (ARGV.length >= 1) and (ARGV[0]=='stop')
+    if ARGV.length==1
+      puts "you should specify pid-list or 'all'"
+      display_manual
+    elsif (ARGV.length==2) and (ARGV[1]=='all')
+      stop_grader(:all)
+      puts "A global stop file ('stop.all') created."
+      puts "You should remove it manually later."
+    else
+      (1..ARGV.length-1).each do |i|
+        stop_grader(ARGV[i])
+      end
+      puts "stop file(s) created"
+    end
+    exit(0)
+  end
+
+  # Check stop file.
+  if check_stopfile
+    puts "Stop file exists.  Terminated."
+    clear_stopfile
+    exit(0)
+  end
+
+  #default options
+  options = {
+    :mode => 'queue',
+    :environment => 'exam',
+    :dry_run => false,
+  }
+
+  # Process mode and environment option
+  if ARGV.length >= 1
+    options[:environment] = ARGV.shift
+    if ARGV.length >=1
+      options[:mode] = ARGV.shift
+    end
+  else
+    puts 'no argument specified, using default mode and environment.'
+  end
+
+  options[:dry_run] = (ARGV.delete('--dry') != nil)
+  if options[:dry_run] and (not ['prob','contest','autonew'].include? options[:mode])
+    puts "Dry run currently works only for 'prob' or 'contest' modes."
+    exit(0)
+  end
+
+  options[:report] = (ARGV.delete('--report') != nil)
+  if options[:report] and (not ['prob','contest','autonew'].include? options[:mode])
+    puts "Report currently works only for 'prob' or 'contest' modes."
+    exit(0)
+  end
+
+  options[:all_sub] = (ARGV.delete('--all-sub') != nil)
+
+  options[:err_log] = (ARGV.delete('--err-log') != nil)
+
+  return options
+end
+
+class ResultCollector
+  def initialize
+    @results = {}
+    @problems = {}
+    @users = {}
+  end
+
+  def after_save_hook(submission, grading_result)
+  end
+
+  def save(submission, grading_result)
+    user = submission.user
+    problem = submission.problem
+    if not @problems.has_key? problem.id
+      @problems[problem.id] = problem
+    end
+    if not @users.has_key? user.id
+      @users[user.id] = user
+    end
+    @results[[user.id, problem.id]] = grading_result
+
+    after_save_hook(submission, grading_result)
+  end
+
+  def print_report_by_user
+    puts "---------------------"
+    puts "       REPORT"
+    puts "---------------------"
+
+    print "login,email"
+    @problems.each_value do |problem|
+      print ",#{problem.name}"
+    end
+    print "\n"
+
+    @users.each_value do |user|
+      print "#{user.login},#{user.email}"
+      @problems.each_value do |problem|
+        if @results.has_key? [user.id, problem.id]
+          print ",#{@results[[user.id,problem.id]][:points]}"
+        else
+          print ","
+        end
+      end
+      print "\n"
+    end
+  end
+end
+
+def grader_general_loop(engine, grader_proc, options)
+  runner = Grader::Runner.new(engine, grader_proc)
+  while true
+    
+    if check_stopfile    # created by calling grader stop
+      clear_stopfile
+      log "stopped (with stop file)"
+      break
+    end
+
+    task = yield(runner)
+
+    if task==nil
+      sleep(1)
+    end
+  end
+end
+
+def grader_queue_loop(grader_proc, options)
+  log "Grader: queue"
+  engine = Grader::Engine.new
+  grader_general_loop(engine, grader_proc, options) do |runner| 
+    runner.grade_oldest_task
+  end
+end
+
+def grader_test_request_loop(grader_proc, options)
+  log "Grader: test_request"
+  engine = Grader::Engine.new(:room_maker => Grader::TestRequestRoomMaker.new,
+                              :reporter => Grader::TestRequestReporter.new)
+  grader_general_loop(engine, grader_proc, options) do |runner| 
+    runner.grade_oldest_test_request
+  end
+end
+
+def grader_autonew_loop(grader_proc, options)
+  log "Grader: autonew"
+
+  if options[:report]
+    result_collector = ResultCollector.new
+  else
+    result_collector = nil
+  end
+
+  if options[:dry_run]
+    puts "Running in dry mode"
+  end
+
+  prob_reporter = Grader::SubmissionReporter.new(:dry_run => options[:dry_run],
+                                                 :result_collector => result_collector)
+
+  engine = Grader::Engine.new(:reporter => prob_reporter)
+  runner = Grader::Runner.new(engine, grader_proc)
+  
+  grader_proc.report_active if grader_proc!=nil
+
+  latest_submitted_at = nil
+  graded_submission_ids = {}
+
+  while true
+    
+    if check_stopfile    # created by calling grader stop
+      clear_stopfile
+      log "stopped (with stop file)"
+      break
+    end
+
+    if latest_submitted_at==nil
+      submissions = Submission.all
+    else
+      submissions = Submission.all(:conditions => ["submitted_at >= :latest", 
+                                                   {:latest => latest_submitted_at}])
+    end
+
+    graded_any = false
+
+    if submissions.length != 0
+      submissions.each do |submission|
+        if (submission.problem == nil) or (!submission.problem.available)
+          next
+        end
+        if ! graded_submission_ids[submission.id]
+          runner.grade_submission(submission)
+          graded_submission_ids[submission.id] = true
+          if (!latest_submitted_at or 
+              latest_submitted_at < submission.submitted_at)
+            latest_submitted_at = submission.submitted_at
+          end
+          puts "graded: #{submission.id}"
+          puts "latest: #{latest_submitted_at}"
+          graded_any = true
+        end
+      end
+    end
+
+    if ! graded_any
+      sleep(1)
+    end
+  end 
+end
+
+def grader_grade_problems(grader_proc, options)
+  if options[:report]
+    result_collector = ResultCollector.new
+  else
+    result_collector = nil
+  end
+
+  if options[:dry_run]
+    puts "Running in dry mode"
+  end
+
+  prob_reporter = Grader::SubmissionReporter.new(:dry_run => options[:dry_run],
+                                                 :result_collector => result_collector)
+  engine = Grader::Engine.new(:reporter => prob_reporter)
+  runner = Grader::Runner.new(engine, grader_proc)
+  
+  grader_proc.report_active if grader_proc!=nil
+  
+  ARGV.each do |prob_name|
+    prob = Problem.find_by_name(prob_name)
+    if prob==nil
+      puts "cannot find problem: #{prob_name}"
+    else
+      runner.grade_problem(prob,options)
+    end
+  end
+
+  if options[:report]
+    result_collector.print_report_by_user
+  end
+end
+
+def grader_grade_contests(grader_proc, options)
+  # always use dry run when grading during contest
+  dry_run = options[:dry_run] = true
+
+  contest_name = ARGV.shift
+
+  contest = Contest.find_by_name(contest_name)
+  if contest==nil
+    puts "cannot find contest: #{contest_name}"
+    exit(0)
+  end
+  
+  if options[:report]
+    result_collector = ResultCollector.new
+  else
+    result_collector = nil
+  end
+
+  if options[:dry_run]
+    puts "Running in dry mode"
+  end
+
+  prob_reporter = Grader::SubmissionReporter.new(:dry_run => dry_run,
+                                                 :result_collector => result_collector)
+  engine = Grader::Engine.new(:reporter => prob_reporter)
+  runner = Grader::Runner.new(engine, grader_proc)
+  
+  grader_proc.report_active if grader_proc!=nil
+  
+  contest.problems.each do |problem|
+    puts "Grading: #{problem.name}"
+    runner.grade_problem(problem, 
+                         :user_conditions => lambda do |u| 
+                           u.contest_finished? and 
+                             u.contest_ids.include?(contest.id)
+                         end)
+  end
+  
+  if options[:report]
+    result_collector.print_report_by_user
+  end  
+end
+
+def grader_grade_submissions(grader_proc, options)
+  engine = Grader::Engine.new
+  runner = Grader::Runner.new(engine, grader_proc)
+
+  grader_proc.report_active if grader_proc!=nil
+
+  ARGV.each do |sub_id|
+    puts "Grading #{sub_id}"
+    begin
+      submission = Submission.find(sub_id.to_i)
+    rescue ActiveRecord::RecordNotFound
+      puts "Submission #{sub_id} not found"
+      submission = nil
+    end
+
+    if submission!=nil
+      runner.grade_submission(submission)
+    end
+  end
+end
+
+#########################################
+# main program
+#########################################
+
+options = process_options_and_stop_file
+GRADER_ENV = options[:environment]
+grader_mode = options[:mode]
+dry_run = options[:dry_run]
+
+puts "environment: #{GRADER_ENV}"
+puts "grader mode: #{grader_mode}"
+require File.join(File.dirname(__FILE__),'config/environment')
+
+# add grader_mode to config
+# this is needed because method log needs it.  TODO: clean this up
+class << config
+  attr_accessor :grader_mode
+end
+config.grader_mode = grader_mode
+
+# reading rails environment
+log 'Reading rails environment'
+
+RAILS_ENV = config.rails_env
+require RAILS_ROOT + '/config/environment'
+
+# register grader process
+if config.report_grader
+  grader_proc = GraderProcess.register(config.grader_hostname,
+                                       Process.pid,
+                                       grader_mode)
+else
+  grader_proc = nil
+end
+
+#set loggin environment
+ENV['GRADER_LOGGING'] = log_file_name
+if options[:err_log]
+  err_file_name = log_file_name + '.err'
+  $stderr.reopen(err_file_name,"a")
+  log "STDERR log to file [#{err_file_name}]"
+  warn "start logging for grader PID #{Process.pid} on #{Time.now.in_time_zone}"
+end
+
+
+# register exit handler to report inactive, and terminated
+at_exit do
+  if grader_proc!=nil
+    grader_proc.report_inactive 
+    grader_proc.terminate
+  end
+end
+
+#
+# MAIN LOOP
+#
+
+case grader_mode
+when "queue"
+  grader_queue_loop(grader_proc, options)
+
+when "test_request"
+  grader_test_request_loop(grader_proc, options)
+
+when "prob"
+  grader_grade_problems(grader_proc, options)
+
+when "contest"
+  grader_grade_contests(grader_proc, options)
+
+when "sub"
+  grader_grade_submissions(grader_proc, options)
+
+when "autonew"
+  grader_autonew_loop(grader_proc, options)
+
+else
+  display_manual
+  exit(0)
+end
+

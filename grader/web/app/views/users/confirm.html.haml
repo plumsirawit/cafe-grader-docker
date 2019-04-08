@@ -1,0 +1,17 @@
+- if @result == :successful
+  %h1 
+    =t 'registration.activation_sucessful_title'
+  =t 'registration.account_activated' 
+  %br/
+  =t 'go_ahead_to'
+  = link_to((t 'login_page'), {:controller => 'main', :action => 'login'})
+- else
+  %h1 
+    =t 'registration.activation_failed_title'
+  - if @result == :email_used
+    =t 'registration.errors.activation.email_exists'
+  - else 
+    =t 'registration.errors.activation.invalid'
+  %br/
+  =t 'go_back_to'
+  = link_to((t 'home_page'), {:controller => 'main', :action => 'login'})

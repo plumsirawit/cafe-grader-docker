@@ -1,0 +1,43 @@
+%b= GraderConfiguration['ui.front.welcome_message']
+%br/
+
+- if !@hidelogin
+  =t 'login.message'
+  %br/
+  %br/
+
+  - if flash[:notice]
+    %hr/
+    %b= flash[:notice]
+    %hr/
+
+  %div{ :style => "border: solid 1px gray; padding: 4px; background: #eeeeff;"}
+    = form_tag login_login_path, {class: 'form-horizontal'} do
+      .form-group
+        =label_tag :login, "Login",class: 'col-sm-3 control-label'
+        .col-sm-9
+          =text_field_tag :login, nil, class: 'form-control'
+      .form-group
+        =label_tag :password, "Password", class: 'col-sm-3 control-label'
+        .col-sm-9
+          =password_field_tag :password, nil, class: 'form-control'
+      - unless GraderConfiguration['right.bypass_agreement']
+        .form-group
+          .col-sm-offset-3.col-sm-9
+            .checkbox
+              %label
+                = check_box_tag 'accept_agree'
+                ยอมรับข้อตกลงการใช้งาน
+
+      .form-group
+        .col-sm-offset-3.col-sm-9
+          = submit_tag t('login.login_submit'), class: 'btn btn-primary'
+%br/
+
+- if GraderConfiguration['system.online_registration']
+  =t 'login.participation'
+  %b
+    = "#{t 'login.please'} "
+    = link_to "#{t 'login.register'}", :controller => :users, :action => :new
+  %br/
+  = link_to "#{t 'login.forget_password'}", :controller => :users, :action => :forget

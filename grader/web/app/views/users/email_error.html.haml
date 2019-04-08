@@ -1,0 +1,8 @@
+%h1
+  =t 'registration.errors.email.title'
+
+.errorExplanation
+  =t 'registration.errors.email.expl', :email => @admin_email
+
+=t 'go_back_to'
+=link_to((t 'login_page'), {:controller => 'main', :action => 'login'})

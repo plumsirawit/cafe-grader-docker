@@ -1,0 +1,25 @@
+%tr{:class => (test_request_counter%2==0) ? "info-even" : "info-odd"}
+  %td{:align => "center"}
+    = format_short_time(test_request.submitted_at)
+  %td
+    - if test_request.problem!=nil
+      = test_request.problem.full_name 
+    - else
+      (n/a)
+  %td{:align => "center"}
+    - if test_request.submission
+      = test_request.submission.number
+    - else
+      n/a
+  %td{:align => "center"}
+    = test_request.status_str
+  %td{:align => "center"}
+    - if test_request.output_file_name!=nil
+      = link_to '[download]', :action => 'read', :id => test_request.id
+  %td{:align => "center"}
+    - if test_request.compiler_message!=nil and test_request.compiler_message!=''
+      = "yes"
+    - else
+      = "no"
+  %td{:align => "center"}
+    = link_to '[view]', :action => 'result', :id => test_request.id

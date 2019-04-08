@@ -1,0 +1,186 @@
+#!/usr/bin/env ruby
+
+require 'fileutils'
+
+def log(str='')
+  if ENV['TALKATIVE']!=nil
+    puts str
+  end
+  if ENV['GRADER_LOGGING']!=nil
+    log_fname = ENV['GRADER_LOGGING']
+    fp = File.open(log_fname,"a")
+    fp.puts("judge: #{Time.new.strftime("%H:%M")} #{str}")
+    fp.close
+  end
+end
+
+problem_home = ENV['PROBLEM_HOME']
+
+def execute(command, error_message="")
+  if not system(command)
+    msg = "ERROR: #{error_message}"
+    log msg
+    raise(msg)
+  end
+end
+
+def call_and_log(error_message)
+  begin
+    yield
+  rescue
+    msg = "ERROR: #{error_message}"
+    log msg
+    raise msg
+  end
+end
+
+def clear_and_create_empty_dir(dir)
+  FileUtils.rm_rf(dir, :secure => true)
+  call_and_log("Cannot make directory #{dir}.") { FileUtils.mkdir(dir) }
+end
+
+# ARGV[0] --- language
+# ARGV[1] --- program source file
+# ARGV[2] --- test result directory
+# ARGV[3] --- sandbox directory
+
+if ARGV.length < 2 || ARGV.length > 4
+  puts "Usage: judge <language> <program-source> [<test-result-directory>] [<sandbox-directory>]"
+  puts "  <sandbox-directory> is defaulted to ./sandbox"
+  puts "  <test-result-directory> is defaulted to ./test-result"
+  puts "WARNING: The judge script will forcefully create the (implicitly and explicitly) specified directories and remove anything inside it."
+  exit(127)
+end
+
+language = ARGV[0]
+if language != "c" && language != "c++" && language != "pas" && language != "java" && language != "ruby" && language != "python" && language != "php" && language != "haskell"
+  log "You specified a language that is not supported: #{language}."
+  exit(127)
+end
+
+source_file = ARGV[1]
+ENV['SOURCE_NAME'] = source_file
+if File.exist?(source_file) == false
+  log "The source file does not exist."
+  exit(127)
+end
+
+log "Making test result and sandbox directories..."
+
+current_dir = FileUtils.pwd
+current_dir.strip!
+
+if ARGV.length >= 3
+  test_result_dir = ARGV[2]
+else
+  test_result_dir = "#{current_dir}/test-result"
+end
+
+log "Test result directory: #{test_result_dir}"
+clear_and_create_empty_dir(test_result_dir)
+
+if ARGV.length >= 4
+  sandbox_dir = ARGV[3]
+else
+  sandbox_dir = "#{current_dir}/sandbox"
+end
+log "Sandbox directory: #{sandbox_dir}"
+clear_and_create_empty_dir(sandbox_dir)
+
+# Compile
+log
+log "Compiling..."
+call_and_log("Cannot copy the source file to #{sandbox_dir}") { 
+  FileUtils.cp(source_file, sandbox_dir) 
+}
+begin 
+  Dir.chdir sandbox_dir
+rescue
+  log "ERROR: Cannot change directory to #{sandbox_dir}."
+  exit(127)
+end
+execute("#{problem_home}/script/compile #{language} #{source_file}", "Compilation error!")
+compile_message = open("compiler_message").read
+compile_message.strip!
+call_and_log("Cannot move the compiler message to #{test_result_dir}.") {
+  FileUtils.mv("compiler_message", test_result_dir)
+}
+if !FileTest.exist?("a.out")
+  log "Cannot compile the source code. See message in #{test_result_dir}/compile_message"
+  exit(127)
+else
+  call_and_log("Cannot move the compiled program to #{test_result_dir}") {
+    FileUtils.mv("a.out",test_result_dir)
+    if language == "java" then Dir["*.class"].each { |file| FileUtils.mv(file,test_result_dir)} end
+    if language == "python" then Dir["*.pyc"].each { |file| FileUtils.mv(file,test_result_dir)} end
+  }
+  FileUtils.rm_rf("#{sandbox_dir}/.")
+end
+
+require "#{problem_home}/script/test_dsl.rb"
+load "#{problem_home}/test_cases/all_tests.cfg"
+problem = Problem.get_instance
+
+if problem.well_formed? == false
+  log "The problem specification is not well formed."
+  exit(127)
+end
+
+# Doing the testing.
+(1..(problem.num_tests)).each do |test_num|
+
+  $stdout.print "[#{test_num}]"
+  $stdout.flush
+
+  log "Test number: #{test_num}"
+
+  call_and_log("Cannot copy the compiled program into #{sandbox_dir}") {
+    FileUtils.cp("#{test_result_dir}/a.out", sandbox_dir, :preserve => true)
+    if language == "java" then Dir["#{test_result_dir}/*.class"].each { |file| FileUtils.cp(file,sandbox_dir)} end
+    if language == "python" then Dir["#{test_result_dir}/*.pyc"].each { |file| FileUtils.cp(file,sandbox_dir)} end
+  }
+
+  #additionally copy any extra .txt file
+  data_files = Dir[problem_home + '/*.txt']
+  data_files.each do |file|
+    FileUtils.cp(file,sandbox_dir)
+  end
+
+  begin
+    execute("#{problem_home}/script/run #{language} #{test_num} ", "Error occured during execution of the run script")
+  rescue
+    # do nothing
+  end
+
+  call_and_log("Cannot create directory #{test_result_dir}/#{test_num}") {
+    FileUtils.mkdir "#{test_result_dir}/#{test_num}"
+  }
+  call_and_log("Cannot copy the result file into #{test_result_dir}/#{test_num}") {
+    FileUtils.mv "#{sandbox_dir}/result", "#{test_result_dir}/#{test_num}"
+  }
+  call_and_log("Cannot copy the comment file into #{test_result_dir}/#{test_num}") {
+    FileUtils.mv "#{sandbox_dir}/comment", "#{test_result_dir}/#{test_num}"
+  }
+  call_and_log("Cannot copy the output file into #{test_result_dir}/#{test_num}") {
+    FileUtils.mv "#{sandbox_dir}/output.txt", "#{test_result_dir}/#{test_num}"
+  }
+  call_and_log("Cannot clear #{sandbox_dir}") {
+    FileUtils.rm_rf(Dir.glob("#{sandbox_dir}/*"), :secure => true)
+  }
+end
+
+$stdout.print "[done]\n"
+
+# Grade
+log
+log "Grading..."
+begin
+  Dir.chdir test_result_dir
+rescue
+  log "ERROR: Cannot change directory to #{test_result_dir}."
+  exit(127)
+end
+execute("#{problem_home}/script/grade", "An error occured during grading!")
+
+log
+log "All done!"

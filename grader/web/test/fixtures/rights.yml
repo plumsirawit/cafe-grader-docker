@@ -1,0 +1,13 @@
+# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+
+graders_right:
+  controller: graders
+  action: all
+
+user_admin_right:
+  controller: user_admin
+  action: all
+
+problems_right:
+  controller: problems
+  action: all
