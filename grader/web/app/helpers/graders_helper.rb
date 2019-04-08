@@ -1,2 +1,0 @@
-module GradersHelper
-end
