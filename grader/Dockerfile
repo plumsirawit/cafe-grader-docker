@@ -14,7 +14,7 @@ WORKDIR /
 RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import -
 RUN curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
 ENV RUBY_VERSION=2.3.4
-ENV TZ=\"Asia/Bangkok\"
+ENV TZ=Asia/Bangkok
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN curl -k -L https://get.rvm.io | bash -s stable
 RUN /bin/bash /etc/profile.d/rvm.sh
