@@ -1,13 +1,13 @@
 version: "3"
 services:
   grader:
-    build: .
+    build: ./grader
     security_opt:
       - seccomp:unconfined
     links:
       - db
     ports:
-      - 80:3000
+      - 8080:8080
     environment:
       MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
       MYSQL_USER: root
@@ -15,6 +15,7 @@ services:
       MYSQL_DATABASE: db
     volumes:
       - main:/cafe_grader
+      - ./ev:/cafe_grader/judge/ev
   db:
     image: mysql:5.7
     restart: always
@@ -25,6 +26,18 @@ services:
       MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret
     volumes:
       - persistent:/var/lib/mysql
+      - ./mycustom.cnf:/etc/mysql/conf.d/custom.cnf:ro
+  nginx:
+    build: ./nginx
+    links:
+      - grader
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - main:/cafe_grader
+      - ./cert:/cert:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 volumes:
   main:
   persistent:

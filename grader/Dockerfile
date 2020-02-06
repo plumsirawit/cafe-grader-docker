@@ -14,7 +14,7 @@ WORKDIR /
 RUN curl -sSL https://rvm.io/mpapis.asc | gpg --import -
 RUN curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
 ENV RUBY_VERSION=2.3.4
-ENV TZ=\"Asia/Bangkok\"
+ENV TZ=Asia/Bangkok
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN curl -k -L https://get.rvm.io | bash -s stable
 RUN /bin/bash /etc/profile.d/rvm.sh
@@ -25,7 +25,7 @@ WORKDIR /cafe_grader
 ADD web /cafe_grader/web
 RUN cp web/config/application.rb.SAMPLE web/config/application.rb
 RUN cp web/config/initializers/cafe_grader_config.rb.SAMPLE web/config/initializers/cafe_grader_config.rb
-RUN export timezone=`cat /etc/timezone` && export replace="s!'UTC'!$timezone!g" && echo $replace && sed -i $replace web/config/application.rb
+RUN export timezone=`cat /etc/timezone` && export replace="s!'UTC'!'$timezone'!g" && echo $replace && sed -i $replace web/config/application.rb
 WORKDIR /cafe_grader/web
 
 RUN echo "Object.instance_eval{remove_const :GRADER_ROOT_DIR}" >> config/initializers/cafe_grader_config.rb 
