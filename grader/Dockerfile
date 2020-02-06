@@ -25,7 +25,7 @@ WORKDIR /cafe_grader
 ADD web /cafe_grader/web
 RUN cp web/config/application.rb.SAMPLE web/config/application.rb
 RUN cp web/config/initializers/cafe_grader_config.rb.SAMPLE web/config/initializers/cafe_grader_config.rb
-RUN export timezone=`cat /etc/timezone` && export replace="s!'UTC'!$timezone!g" && echo $replace && sed -i $replace web/config/application.rb
+RUN export timezone=`cat /etc/timezone` && export replace="s!'UTC'!'$timezone'!g" && echo $replace && sed -i $replace web/config/application.rb
 WORKDIR /cafe_grader/web
 
 RUN echo "Object.instance_eval{remove_const :GRADER_ROOT_DIR}" >> config/initializers/cafe_grader_config.rb 
