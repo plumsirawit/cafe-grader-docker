@@ -26,6 +26,7 @@ services:
       MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret
     volumes:
       - persistent:/var/lib/mysql
+      - ./mycustom.cnf:/etc/mysql/conf.d/custom.cnf:ro
   nginx:
     build: ./nginx
     links:
