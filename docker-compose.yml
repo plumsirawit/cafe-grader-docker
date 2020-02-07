@@ -41,6 +41,7 @@ services:
   judge:
     build: ./grader
     command: /bin/bash /cafe_grader/wait-for-mysql-judge.sh
+    restart: always
     links:
       - grader
       - db
