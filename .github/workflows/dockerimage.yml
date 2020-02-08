@@ -8,6 +8,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build the grader web image
-      run: docker build . --file ./grader/Dockerfile --tag grader:$(date +%s)
+      working-directory: ./grader
+      run: docker build . --file Dockerfile --tag grader:$(date +%s)
     - name: Build the NGINX image
-      run: docker build . --file ./nginx/Dockerfile --tag nginx:$(date +%s)
+      working-directory: ./nginx
+      run: docker build . --file Dockerfile --tag nginx:$(date +%s)
