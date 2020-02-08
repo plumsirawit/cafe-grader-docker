@@ -1,0 +1,13 @@
+name: Docker Build Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build the grader web image
+      run: docker build ./grader --file Dockerfile --tag grader:$(date +%s)
+    - name: Build the NGINX image
+      run: docker build ./nginx --file Dockerfile --tag nginx:$(date +%s)
