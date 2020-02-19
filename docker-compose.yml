@@ -4,6 +4,8 @@ services:
     build: ./grader
     security_opt:
       - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
     links:
       - db
     ports:
@@ -45,6 +47,10 @@ services:
     links:
       - grader
       - db
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
     environment:
       MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
       MYSQL_USER: root
