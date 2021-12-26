@@ -11,7 +11,7 @@ done
 echo "MySQL is Ready"
 
 # [7/2/2020] Judge Daemon
-while [ -f "/cafe_grader/setup.sh" ];
+while [ -f "/cafe_grader/judge/setup.sh" ];
 do
   echo "Waiting for setup . . ."
   sleep 1

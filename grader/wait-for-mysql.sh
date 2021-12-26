@@ -9,13 +9,15 @@ do
 done
 
 echo "MySQL is Ready"
-if [ -f "/cafe_grader/setup.sh" ]; then
-  /bin/bash /cafe_grader/setup.sh ;
+if [ -f "/cafe_grader/judge/setup.sh" ]; then
+  /bin/bash /cafe_grader/judge/setup.sh ;
 fi
 
-if [ -d "/cafe_grader/web/tmp" ]; then
-  rm -rf "/cafe_grader/web/tmp" ;
-fi
+# Newer model has no persistence over web
+# (Sirawit, 26/12/2021)
+# if [ -d "/cafe_grader/web/tmp" ]; then
+#  rm -rf "/cafe_grader/web/tmp" ;
+# fi
 
 # For non-SSL purpose
 rails s -p 3000 -b '0.0.0.0'
