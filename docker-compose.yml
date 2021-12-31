@@ -25,6 +25,7 @@ services:
       - main_log:/cafe_grader/log
       - main_judge:/cafe_grader/judge
       - ./ev:/cafe_grader/judge/ev
+      - ./data:/cafe_grader/web/data
   db:
     image: mysql:5.7
     restart: always
@@ -74,6 +75,8 @@ services:
       - main_log:/cafe_grader/log
       - main_judge:/cafe_grader/judge
       - ./ev:/cafe_grader/judge/ev
+      - ./data:/cafe_grader/web/data
+
 volumes:
   main_log:
   main_judge:
