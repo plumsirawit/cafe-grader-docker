@@ -1,9 +1,17 @@
 version: "3"
 services:
   grader:
-    build: ./grader
+    build: 
+      context: ./grader
+      args:
+        MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
+        MYSQL_USER: root
+        MYSQL_PASSWORD: p@ssw0rdsupersecret
+        MYSQL_DATABASE: db
     security_opt:
       - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
     links:
       - db
     ports:
@@ -14,8 +22,10 @@ services:
       MYSQL_PASSWORD: p@ssw0rdsupersecret
       MYSQL_DATABASE: db
     volumes:
-      - main:/cafe_grader
+      - main_log:/cafe_grader/log
+      - main_judge:/cafe_grader/judge
       - ./ev:/cafe_grader/judge/ev
+      - ./data:/cafe_grader/web/data
   db:
     image: mysql:5.7
     restart: always
@@ -35,9 +45,39 @@ services:
       - 80:80
       - 443:443
     volumes:
-      - main:/cafe_grader
+      - main_log:/cafe_grader/log
+      - main_judge:/cafe_grader/judge
       - ./cert:/cert:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  judge:
+    build: 
+      context: ./grader
+      args:
+        MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
+        MYSQL_USER: root
+        MYSQL_PASSWORD: p@ssw0rdsupersecret
+        MYSQL_DATABASE: db
+    command: /bin/bash /cafe_grader/wait-for-mysql-judge.sh
+    restart: always
+    links:
+      - grader
+      - db
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    environment:
+      MYSQL_ROOT_PASSWORD: p@ssw0rdsupersecret 
+      MYSQL_USER: root
+      MYSQL_PASSWORD: p@ssw0rdsupersecret
+      MYSQL_DATABASE: db
+    volumes:
+      - main_log:/cafe_grader/log
+      - main_judge:/cafe_grader/judge
+      - ./ev:/cafe_grader/judge/ev
+      - ./data:/cafe_grader/web/data
+
 volumes:
-  main:
+  main_log:
+  main_judge:
   persistent:
